@@ -145,7 +145,7 @@ def judge():
     name1 = res1 if type(res1) is not dict else '[Unknown]'
     check_both(type(res0) is not dict, type(res1) is not dict, res0, res1)
 
-    while steps < 2000:
+    while steps < 1000:
         steps += 1
         if now_sit == 0:
             res1 = action(ai0)
