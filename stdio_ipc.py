@@ -3,6 +3,12 @@ from queue import Queue
 from threading import Thread
 from subprocess import Popen, PIPE
 from shutil import copyfileobj
+import os
+import resource
+
+def setrlimit():
+    m = 384 * 1024 * 1024
+    resource.setrlimit(resource.RLIMIT_AS, (m, m))
 
 class ChildProcess():
     def __init__(self, args):
@@ -11,7 +17,7 @@ class ChildProcess():
         self.thread = Thread(target=self._message_thread)
         self.stdin = StringIO()
         self.stdout = StringIO()
-        self.child = Popen(args, bufsize=0, stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True)
+        self.child = Popen(args, bufsize=0, stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True, preexec_fn=setrlimit)
 
         self.thread.start()
 

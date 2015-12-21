@@ -208,4 +208,6 @@ def main():
 
 locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 steps = 0
+name0 = 'Unknown'
+name1 = 'Unknown'
 main()
