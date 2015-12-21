@@ -8,7 +8,7 @@ import resource
 
 def setrlimit():
     m = 384 * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_AS, (m, m))
+    resource.setrlimit(resource.RLIMIT_AS, (m, -1))
 
 class ChildProcess():
     def __init__(self, args):
