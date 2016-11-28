@@ -1,24 +1,26 @@
+#!/usr/bin/env python3
+
 from io import StringIO
 from queue import Queue
 from threading import Thread
 from subprocess import Popen, PIPE
-from shutil import copyfileobj
 import os
 import resource
 
 def setrlimit():
-    m = 384 * 1024 * 1024
+    m = 1024 * 1024 * 1024
     resource.setrlimit(resource.RLIMIT_AS, (m, -1))
 
 class ChildProcess():
-    def __init__(self, args):
+    def __init__(self, args, stdin_save_path='/dev/null', stdout_save_path='/dev/null', stderr_save_path='/dev/null'):
         self.qmain = Queue()
         self.qthread = Queue()
         self.thread = Thread(target=self._message_thread)
-        self.stdin = StringIO()
-        self.stdout = StringIO()
-        self.child = Popen(args, bufsize=0, stdin=PIPE, stdout=PIPE, stderr=PIPE, universal_newlines=True, preexec_fn=setrlimit)
-
+        self.stdin = open(stdin_save_path, 'w')
+        self.stdout = open(stdout_save_path, 'w')
+        self.stderr = open(stderr_save_path, 'w')
+        self.child = Popen(args, bufsize=1, stdin=PIPE, stdout=PIPE, stderr=self.stderr, universal_newlines=True, preexec_fn=setrlimit)
+        self.abused = 0
         self.thread.start()
 
     def _message_thread(self):
@@ -30,6 +32,13 @@ class ChildProcess():
 
                 elif op['command'] == 'send':
                     content = op['content']
+                    if self.abused == 0:
+                        if self.child.poll() is not None:
+                            self.abused = -1
+                            self.qthread.put('finish')
+                            raise Exception('program unexpectedly terminated')
+                        else:
+                            self.abused = 2
                     self.child.stdin.write(content)
                     self.child.stdin.flush()
                     self.stdin.write(content)
@@ -37,6 +46,13 @@ class ChildProcess():
 
                 elif op['command'] == 'recv':
                     content = ''
+                    if self.abused == 0:
+                        if self.child.poll() is not None:
+                            self.qthread.put('finish')
+                            self.abused = -1
+                            raise Exception("ERROR: Runtime error.")
+                        else:
+                            self.abused = 2
                     while not content.endswith('END\n'):
                         chunk = self.child.stdout.readline()
                         if not chunk:
@@ -67,13 +83,10 @@ class ChildProcess():
 
     def exit(self):
         self.qmain.put({ 'command': 'exit' })
-        self.child.kill()
+        if self.child.poll() is not None:
+            self.child.kill()
         self.thread.join()
+        self.stdin.close()
+        self.stdout.close()
+        self.stderr.close()
 
-    def save_stdio(self, path_stdin, path_stdout, path_stderr):
-        with open(path_stdin, 'w')  as fin,\
-             open(path_stdout, 'w') as fout,\
-             open(path_stderr, 'w') as ferr:
-            fin.write(self.stdin.getvalue())
-            fout.write(self.stdout.getvalue())
-            copyfileobj(self.child.stderr, ferr)
